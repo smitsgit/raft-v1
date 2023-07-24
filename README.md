@@ -80,6 +80,31 @@ A node can be in a one of the three states
 ## Replicated Log 
 ***
 
+## Client interaction
+[Source](https://eli.thegreenplace.net/2020/implementing-raft-part-0-introduction/)
+
+Earlier, I said "Instead of contacting a single server to perform a service, clients will contact the whole cluster"; but what does this mean? A cluster is just a group of servers connected over the network, so how do you contact "the whole cluster"?
+
+The answer is simple:
+
+- When working with a Raft cluster, a client knows the network addresses of the cluster's replicas. How it knows this (e.g. by using some sort of service discovery mechanism) it out of scope for this post.
+- A client initially sends a request to an arbitrary replica. If this replica is the leader, it acknowledges the request immediately and the client will wait for a full response. After that, the client remembers that this replica is the leader and won't have to search for it again (until some failure, like leader crash).
+- If the replica says it's not the leader, the client will try another replica. A possible optimization here is that a follower replica can tell the client which other replica is the leader. Since replicas communicate continuously among themselves, typically it knows the right answer. This can save the client a couple of guesses.
+- Another case in which the client may realize the replica it contacted is not the leader is if it's request is not committed within some timeout. This may mean the replica it contacted is not actually the leader (even if it still thinks it is) - it may have been partitioned from the other Raft servers. When the timeout elapses, the client will go on searching for a different leader again.
+
+The optimization mentioned in the third bullet point is not necessary in most cases.
+In general, it's useful to distinguish between "normal operation" and "fault scenario"
+in Raft. A typical service will spend over 99.9% of its time in "normal operation",
+where clients know who the leader is because they have this information cached from
+back when they first contacted the service. Fault scenarios - which we'll discuss in
+more detail in the next section - definitely muddle the waters, but only for a short
+while. As we'll learn in detail in the next posts, a Raft cluster will recover from
+a temporary server failure or network partition very quickly - in well under a second
+in most scenarios. There will be a short blip of unavailability while the new leader
+asserts its leadership and clients find which server it is, but afterwards it will go
+back to the "normal operation mode"
+
+
 ## Resources 
 ***
 - https://raft.github.io/raft.pdf
